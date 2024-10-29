@@ -1,0 +1,81 @@
+import requests
+import json
+import jwt
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.padding import PKCS1v15
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from core.app_settings import AppSettings
+from core.singleton_metaclass import SingletonMeta
+from fastapi import Request
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
+from jwt.exceptions import ExpiredSignatureError, PyJWTError
+from base64 import urlsafe_b64decode
+
+class JWKSValidator(metaclass=SingletonMeta):
+    def __init__(self, app_settings: AppSettings):
+        self.jwks_url = app_settings.taase_jwks
+        self.jwks_keys = self._fetch_jwks()
+
+    def _fetch_jwks(self):
+        response = requests.get(self.jwks_url)
+        response.raise_for_status()
+        jwks_data = response.json()
+        return {key["kid"]: key for key in jwks_data["keys"]}
+
+    def get_key(self, kid):
+        if kid not in self.jwks_keys:
+            self.jwks_keys = self._fetch_jwks()
+            if kid not in self.jwks_keys:
+                raise Exception("No keys found")
+        return self.jwks_keys[kid]
+
+    def construct_rsa_key(self, jwk):
+        n = int.from_bytes(urlsafe_b64decode(jwk['n'] + '=='), byteorder='big')
+        e = int.from_bytes(urlsafe_b64decode(jwk['e'] + '=='), byteorder='big')
+        
+        public_key = rsa.RSAPublicNumbers(e, n).public_key(default_backend())
+        return public_key
+
+class JWTValidationMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app, app_settings: AppSettings, jwks_validator: JWKSValidator, exclude_paths=None, *args, **kwargs):
+        super().__init__(app, *args, **kwargs)
+        self.app = app
+        self.jwks_validator = jwks_validator
+        self.app_settings = app_settings
+        self.exclude_paths = exclude_paths or []
+
+    async def dispatch(self, request: Request, call_next):
+        token = None
+        for key, value in request.headers.items():
+            if key.lower() == "authorization":
+                token = value.split(" ")[-1]  # Extract token from "Bearer <token>"
+
+        if not token or request.url.path in self.exclude_paths:
+            return await call_next(request)
+
+        try:
+            # Extract the kid from the token header
+            unverified_header = jwt.get_unverified_header(token)
+            kid = unverified_header.get("kid")
+
+            # Get the JWK and construct RSA key
+            jwk = self.jwks_validator.get_key(kid)
+            rsa_key = self.jwks_validator.construct_rsa_key(jwk)
+
+            # Decode the token
+            payload = jwt.decode(
+                token,
+                rsa_key,
+                audience=self.app_settings.taase_audience,
+                algorithms=["RS256"]
+            )
+        except ExpiredSignatureError:
+            return JSONResponse({"detail": "Token expired"}, status_code=401)
+        except PyJWTError:
+            return JSONResponse({"detail": "JWT Validation failed"}, status_code=401)
+
+        return await call_next(request)
