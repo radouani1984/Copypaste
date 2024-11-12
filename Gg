@@ -1,0 +1,48 @@
+using Npgsql;
+using Npgsql.DataSource;
+
+public partial class PostgresStreamStore : StreamStoreBase
+{
+    private readonly NpgsqlDataSource _dataSource;
+    
+    public PostgresStreamStore(PostgresStreamStoreSettings settings)
+        : base(settings.GetUtcNow, settings.LogName)
+    {
+        _settings = settings;
+        
+        // Create and configure the data source with composite type mapping
+        var dataSourceBuilder = new NpgsqlDataSourceBuilder(_settings.ConnectionFactory(_settings.ConnectionString));
+        dataSourceBuilder.MapComposite<PostgresNewStreamMessage>("new_stream_message_type"); // Use your actual composite type name
+        
+        _dataSource = dataSourceBuilder.Build();
+        
+        _streamStoreNotifier = new Lazy<IStreamStoreNotifier>(() =>
+        {
+            if (_settings.CreateStreamStoreNotifier == null)
+                throw new InvalidOperationException("Cannot create notifier because supplied createStreamStoreNotifier was null");
+
+            return _settings.CreateStreamStoreNotifier.Invoke(this);
+        });
+
+        _schema = new Schema(_settings.Schema);
+    }
+
+    private async Task<NpgsqlConnection> OpenConnection(CancellationToken cancellationToken)
+    {
+        // Open connection using the pre-configured data source
+        var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+
+        // Only reload types if it's still necessary
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        if (_settings.ExplainAnalyze)
+        {
+            using (var command = new NpgsqlCommand(_schema.EnableExplainAnalyze, connection))
+            {
+                await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        return connection;
+    }
+}
