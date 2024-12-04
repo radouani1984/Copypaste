@@ -1,0 +1,30 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: delete-jobs-role
+  namespace: default # Replace with your target namespace
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["delete", "list", "get"]
+
+  ----
+  apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: delete-jobs-binding
+  namespace: default # Replace with your target namespace
+subjects:
+  - kind: ServiceAccount
+    name: your-service-account # Replace with the name of your service account
+    namespace: default         # Ensure this matches the namespace of the service account
+roleRef:
+  kind: Role
+  name: delete-jobs-role
+  apiGroup: rbac.authorization.k8s.io
+
+  curl -X DELETE \
+  "https://$KUBERNETES_SERVICE_HOST:$KUBERNETES_SERVICE_PORT_HTTPS/apis/batch/v1/namespaces/default/jobs" \
+  -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
+  -H "Accept: application/json" \
+  --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
