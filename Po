@@ -1,0 +1,81 @@
+Here is your prompt for implementing user management with fixed roles (Admin and User) and user assignment management:
+
+
+---
+
+Prompt
+
+You are tasked with creating a Python-based in-memory user management system with the following requirements:
+
+1. Fixed Roles:
+
+The system should support exactly two roles: Admin and User.
+
+
+
+2. User Management Features:
+
+Add Users: Allow adding users with a specified role (Admin or User).
+
+View Role: Retrieve the role assigned to a specific user.
+
+Update Role: Change the role of an existing user, ensuring it is either Admin or User.
+
+Delete Users: Remove users from the system.
+
+List All Users: Retrieve a list of all users and their roles.
+
+
+
+3. Design Considerations:
+
+Use a thread-safe singleton class to ensure there is only one user management system instance, even in a multi-threaded environment.
+
+Validate inputs to prevent invalid roles or duplicate usernames.
+
+Ensure the system is scalable for in-memory operations while remaining lightweight and efficient.
+
+
+
+4. Advanced Features:
+
+Implement logging to track actions like adding, updating, or deleting users.
+
+Allow the option to export the user list as a dictionary for further processing.
+
+
+
+5. Code Requirements:
+
+Write clean, modular, and well-documented code.
+
+Include error handling for invalid operations.
+
+Design the solution with extensibility in mind, allowing for future enhancements if additional roles or features are required.
+
+
+
+6. Usage Example:
+
+Add a user named "Alice" as an Admin.
+
+Add a user named "Bob" as a User.
+
+Retrieve the role of "Alice".
+
+Update Bob's role to Admin.
+
+List all users and their roles.
+
+Delete "Alice" from the system.
+
+Export the user list as a dictionary.
+
+
+
+
+
+---
+
+This prompt is comprehensive, professional, and clear, suitable for implementing a robust solution.
+
