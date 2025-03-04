@@ -1,0 +1,222 @@
+import os
+import re
+import json
+import logging
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import List, Set
+from filelock import FileLock
+import boto3
+from botocore.exceptions import ClientError
+from pybloom import ScalableBloomFilter
+from airflow.decorators import dag, task
+from airflow.models import Variable
+from concurrent.futures import ThreadPoolExecutor
+from tqdm import tqdm
+
+# Logging Setup
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
+# Configuration
+DATA_SOURCES = json.loads(Variable.get("s3_sync_config", "{}"))
+DEST_BUCKET = Variable.get("dest_bucket", "default-destination-bucket")
+BLOOM_DIR = Path("/opt/airflow/bloom_data")
+BLOOM_FILE = BLOOM_DIR / "sync.bloom"
+MANIFEST_FILE = BLOOM_DIR / "sync.manifest"
+LOCK_FILE = BLOOM_DIR / "sync.lock"
+MAX_OPS_PER_RUN = 100
+BLOOM_ERROR_RATE = 0.001
+
+# Ensure Bloom directory exists
+BLOOM_DIR.mkdir(exist_ok=True)
+
+# Helpers
+def get_s3_client(source_id: str):
+    """Create an S3 client with given source ID configuration."""
+    try:
+        config = DATA_SOURCES[source_id]
+        return boto3.client(
+            's3',
+            endpoint_url=f"http://{source_id}:{config['port']}",
+            aws_access_key_id='access_key',
+            aws_secret_access_key='secret_key'
+        )
+    except KeyError:
+        logger.error(f"Source ID '{source_id}' not found in DATA_SOURCES")
+        return None
+    except Exception as e:
+        logger.exception(f"Failed to create S3 client for {source_id}: {e}")
+        return None
+
+def pattern_to_regex(pattern: str) -> str:
+    """Convert a given filename pattern to a regex pattern."""
+    try:
+        regex = re.escape(pattern).replace(r'\d{14}', r'\d{14}')  # Preserve timestamp pattern
+        return f'^{regex}$'
+    except Exception as e:
+        logger.exception(f"Failed to convert pattern to regex: {e}")
+        return pattern
+
+# Bloom Filter Management
+class BloomManager:
+    """Manages Bloom filter operations."""
+    def __init__(self):
+        self.lock = FileLock(LOCK_FILE)
+        
+        if BLOOM_FILE.exists():
+            try:
+                with self.lock, open(BLOOM_FILE, "rb") as f:
+                    self.bloom = ScalableBloomFilter.fromfile(f)
+                logger.info("Bloom filter loaded successfully.")
+            except Exception as e:
+                logger.exception(f"Error loading Bloom filter: {e}")
+                self.bloom = ScalableBloomFilter(error_rate=BLOOM_ERROR_RATE)
+        else:
+            self.bloom = ScalableBloomFilter(error_rate=BLOOM_ERROR_RATE)
+            logger.info("Initialized new Bloom filter.")
+
+    def save(self):
+        """Persist the Bloom filter to disk."""
+        try:
+            with self.lock, open(BLOOM_FILE, "wb") as f:
+                self.bloom.tofile(f)
+            logger.info("Bloom filter saved.")
+        except Exception as e:
+            logger.exception(f"Failed to save Bloom filter: {e}")
+
+    def add_keys(self, keys: List[str]):
+        """Add multiple keys to the Bloom filter."""
+        with self.lock:
+            for key in tqdm(keys, desc="Updating Bloom Filter", unit="keys"):
+                self.bloom.add(key)
+        self.save()
+
+    def contains(self, key: str) -> bool:
+        """Check if a key exists in the Bloom filter."""
+        with self.lock:
+            return key in self.bloom
+
+# DAG 1: Bloom Filter Refresh
+@dag(
+    schedule=timedelta(hours=2),
+    start_date=datetime(2023, 1, 1),
+    catchup=False,
+    max_active_runs=1
+)
+def bloom_refresh_dag():
+    @task
+    def build_source_manifest():
+        bloom = BloomManager()
+        manifest = set()
+
+        for source_id, config in DATA_SOURCES.items():
+            s3 = get_s3_client(source_id)
+            if not s3:
+                continue
+
+            for bucket, patterns in config["buckets"].items():
+                for pattern in patterns:
+                    try:
+                        if pattern.endswith('/'):
+                            paginator = s3.get_paginator('list_objects_v2')
+                            for page in tqdm(paginator.paginate(Bucket=bucket, Prefix=pattern), desc=f"Listing {bucket}", unit="files"):
+                                for obj in page.get('Contents', []):
+                                    key = f"{source_id}/{bucket}/{obj['Key']}"
+                                    manifest.add(key)
+                        else:
+                            regex = re.compile(pattern_to_regex(pattern))
+                            base_prefix = os.path.dirname(pattern) + '/'
+                            paginator = s3.get_paginator('list_objects_v2')
+                            for page in paginator.paginate(Bucket=bucket, Prefix=base_prefix):
+                                for obj in page.get('Contents', []):
+                                    if regex.fullmatch(obj['Key']):
+                                        key = f"{source_id}/{bucket}/{obj['Key']}"
+                                        manifest.add(key)
+                    except ClientError as e:
+                        logger.error(f"S3 Error in {bucket}: {e}")
+
+        with open(MANIFEST_FILE, 'w') as f:
+            f.write('\n'.join(manifest))
+        
+        bloom.add_keys(list(manifest))
+        return list(manifest)
+
+    build_source_manifest()
+
+# DAG 2: Sync Operations
+@dag(
+    schedule=timedelta(minutes=5),
+    start_date=datetime(2023, 1, 1),
+    catchup=False,
+    max_active_tasks=10
+)
+def sync_operations_dag():
+    @task
+    def process_deletions():
+        s3 = boto3.client('s3')
+        bloom = BloomManager()
+
+        try:
+            with open(MANIFEST_FILE) as f:
+                current_manifest = set(f.read().splitlines())
+
+            orphans = []
+            paginator = s3.get_paginator('list_objects_v2')
+
+            for page in tqdm(paginator.paginate(Bucket=DEST_BUCKET), desc="Checking Deletions", unit="files"):
+                for obj in page.get('Contents', []):
+                    if obj['Key'] not in current_manifest:
+                        orphans.append(obj['Key'])
+
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                for key in tqdm(orphans[:MAX_OPS_PER_RUN], desc="Deleting Files", unit="files"):
+                    executor.submit(s3.delete_object, Bucket=DEST_BUCKET, Key=key)
+            
+            return len(orphans)
+        except Exception as e:
+            logger.exception(f"Error processing deletions: {e}")
+            return 0
+
+    @task
+    def process_copies():
+        bloom = BloomManager()
+        ops_count = 0
+
+        try:
+            with open(MANIFEST_FILE) as f:
+                manifest = f.read().splitlines()
+
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                futures = []
+                for key in tqdm(manifest, desc="Processing Copies", unit="files"):
+                    if ops_count >= MAX_OPS_PER_RUN:
+                        break
+
+                    if not bloom.contains(key):
+                        source_id, bucket, src_key = key.split('/', 2)
+                        s3_src = get_s3_client(source_id)
+                        s3_dest = boto3.client('s3')
+
+                        if s3_src:
+                            futures.append(executor.submit(
+                                s3_src.copy_object,
+                                CopySource={'Bucket': bucket, 'Key': src_key},
+                                Bucket=DEST_BUCKET,
+                                Key=key
+                            ))
+                            ops_count += 1
+
+                bloom.add_keys([key for fut in futures if fut.result() is not None])
+            return ops_count
+        except Exception as e:
+            logger.exception(f"Error processing copies: {e}")
+            return 0
+
+    deletions = process_deletions()
+    copies = process_copies()
+    deletions >> copies
+
+# DAG Initialization
+bloom_dag = bloom_refresh_dag()
+sync_dag = sync_operations_dag()
