@@ -1,0 +1,54 @@
+{
+   "cos000001": {
+       "port": 2020,
+       "buckets": {
+           "buck09": [
+               "f/s/a/",
+               "fs/a/s/f.ext"
+           ],
+           "buck10": [
+               "x/y/z/",
+               "x/y/z/file.txt"
+           ]
+       }
+   },
+   "cos000002": {
+       "port": 3030,
+       "buckets": {
+           "buck11": [
+               "data/logs/",
+               "data/logs/log1.txt"
+           ],
+           "buck12": [
+               "backup/",
+               "backup/backup1.tar.gz"
+           ]
+       }
+   },
+   "cos000003": {
+       "port": 4040,
+       "buckets": {
+           "buck13": [
+               "images/",
+               "images/photo_{YYYYMMDD}.jpg"
+           ],
+           "buck14": [
+               "videos/",
+               "videos/video.mp4"
+           ]
+       }
+   },
+   "cos000004": {
+       "port": 5050,
+       "buckets": {
+           "buck15": [
+               "documents/",
+               "documents/report.pdf"
+           ],
+           "buck16": [
+               "archives/",
+               "archives/archive.zip"
+           ]
+       }
+   }
+}
