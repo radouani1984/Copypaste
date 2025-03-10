@@ -1,0 +1,37 @@
+from sqlalchemy import select, or_, and_, func
+
+@staticmethod
+async def find_permissions(db: AsyncSession, user_id: str, path: str):
+    query = (
+        select(
+            user_permission_association.c.ttl,
+            user_permission_association.c.created_at,
+            user_permission_association.c.user_id,
+            Permission.name
+        )
+        .join(Permission, Permission.permission_id == user_permission_association.c.permission_id)
+        .join(QuantPath, QuantPath.path_id == Permission.path_id)
+        .where(
+            user_permission_association.c.user_id == user_id,
+            or_(
+                # Exact match
+                QuantPath.path == path,
+                
+                # Database path ends with '/' and 
+                # path starts with QuantPath.path
+                and_(
+                    QuantPath.path.like('%/'),
+                    path.like(func.concat(QuantPath.path, '%'))
+                ),
+                
+                # Database path has a wildcard '*'
+                # and path matches the replaced pattern
+                and_(
+                    QuantPath.path.like('%*'),
+                    path.like(func.replace(QuantPath.path, '*', '%'))
+                )
+            )
+        )
+    )
+    result = await db.execute(query)
+    return result.fetchall()
