@@ -1,0 +1,225 @@
+"""
+DAG : 'phf_refresh_dag'
+- Lecture de la variable 'data_source' (JSON) décrivant plusieurs 'cosXXXX'
+  avec ports, buckets et chemins (ex: "f/s/a/" ou "fs/a/s/f.ext").
+- Listing parallèle des objets (en gérant prefix vs. clé unique).
+- Construction d'un Perfect Hash + bit array unique pour TOUTES les clés trouvées.
+- Enregistrement sur disque.
+- S'exécute toutes les 3 heures (exemple).
+"""
+
+import os
+from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from airflow.decorators import dag, task
+from airflow.models import Variable
+
+import ibm_boto3
+from ibm_botocore.client import Config
+
+# Perfect Hash
+from perfect_hash import PerfectHash
+# bitarray
+from bitarray import bitarray
+
+# ---------------- CONFIG ----------------
+PHF_PATH = "/tmp/global_phf.pkl"
+BITARRAY_PATH = "/tmp/global_filter.bin"
+
+# On utilise ce placeholder pour la date
+def resolve_placeholders(path: str) -> str:
+    """Remplace {YYYYMMDD} par la date du jour."""
+    date_str = datetime.now().strftime("%Y%m%d")
+    return path.replace("{YYYYMMDD}", date_str)
+
+# =========== CLASSES PRINCIPALES (SOLID) ============
+
+class S3Util:
+    """
+    Gère les opérations S3 (listage paginé, vérif existence).
+    Peut être instancié pour chaque cos_id + port différent.
+    """
+    def __init__(self, cos_id: str, port: int, api_key: str, svc_id: str):
+        endpoint_url = f"https://{cos_id}.example.com:{port}"
+        self.client = ibm_boto3.client(
+            service_name='s3',
+            ibm_api_key_id=api_key,
+            ibm_service_instance_id=svc_id,
+            config=Config(signature_version='oauth'),
+            endpoint_url=endpoint_url
+        )
+
+    def list_keys_with_prefix(self, bucket: str, prefix: str):
+        """
+        Liste en pagination tous les objets commençant par 'prefix'.
+        Retourne un set de clés.
+        """
+        keys = set()
+        paginator = self.client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                keys.add(obj["Key"])
+        return keys
+
+    def key_exists(self, bucket: str, key: str) -> bool:
+        """
+        Vérifie si un objet unique existe.
+        """
+        try:
+            self.client.head_object(Bucket=bucket, Key=key)
+            return True
+        except:
+            return False
+
+
+class PerfectHashBuilder:
+    """
+    Construit un PerfectHash + bitarray pour un ensemble de clés.
+    """
+    def __init__(self, phf_path: str, bitarray_path: str):
+        self.phf_path = phf_path
+        self.bitarray_path = bitarray_path
+
+    def build_and_save(self, all_keys):
+        """
+        - Construit PerfectHash
+        - Construit bitarray
+        - Sauvegarde sur disque
+        """
+        all_keys_list = list(all_keys)  # Convertit set -> list
+        phf = PerfectHash(keys=all_keys_list)
+        phf.save(self.phf_path)
+
+        ba = bitarray(len(all_keys_list))
+        ba.setall(False)
+        for k in all_keys_list:
+            idx = phf(k)  # index unique
+            ba[idx] = True
+
+        with open(self.bitarray_path, "wb") as f:
+            ba.tofile(f)
+
+
+class FullRefreshOrchestrator:
+    """
+    Orchestration du "refresh" :
+    - Lit la config data_source
+    - Pour chaque cosXXX, crée un S3Util et liste les clés
+      (en parallèle par bucket).
+    - Concatène toutes les clés dans un grand set.
+    - Construit le PerfectHash + bitarray final.
+    """
+
+    def __init__(self, data_source: dict, api_key: str, svc_id: str):
+        self.data_source = data_source  # dict complet
+        self.api_key = api_key
+        self.svc_id = svc_id
+
+    def run_refresh(self):
+        all_keys = set()
+
+        # Pour paralléliser le listage, on stocke les futures
+        # (chaque future = listage d'un bucket / prefix)
+        futures = []
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            for cos_id, cos_info in self.data_source.items():
+                port = cos_info.get("port", 443)
+                s3_util = S3Util(cos_id, port, self.api_key, self.svc_id)
+
+                buckets_map = cos_info.get("buckets", {})
+                for bucket_name, paths in buckets_map.items():
+                    for path in paths:
+                        path_resolved = resolve_placeholders(path)
+
+                        if path_resolved.endswith("/"):
+                            # prefix => list
+                            futures.append(
+                                executor.submit(
+                                    s3_util.list_keys_with_prefix,
+                                    bucket_name,
+                                    path_resolved
+                                )
+                            )
+                        else:
+                            # Objet unique => check existence
+                            # On simule le listing en set{ key } si existe
+                            futures.append(
+                                executor.submit(
+                                    self._check_single_key,
+                                    s3_util,
+                                    bucket_name,
+                                    path_resolved
+                                )
+                            )
+
+            # Récupération des résultats
+            for fut in as_completed(futures):
+                result = fut.result()
+                # result est un set (liste prefix) ou un set à 1 clé (objet unique)
+                all_keys |= result  # Union
+
+        # Maintenant on construit le PerfectHash final
+        builder = PerfectHashBuilder(PHF_PATH, BITARRAY_PATH)
+        builder.build_and_save(all_keys)
+
+    def _check_single_key(self, s3_util: S3Util, bucket_name: str, key: str):
+        """
+        Retourne un set avec la clé si elle existe, sinon set() vide.
+        """
+        return {key} if s3_util.key_exists(bucket_name, key) else set()
+
+# ============= DAG DEFINITION =============
+
+@dag(
+    schedule_interval="0 */3 * * *",  # toutes les 3 heures
+    start_date=datetime(2025, 3, 1),
+    catchup=False,
+    default_args={
+        "owner": "cloud-architect",
+        "retries": 1,
+        "retry_delay": timedelta(minutes=5)
+    },
+    description="DAG : Full Refresh PerfectHash depuis multi COS & buckets."
+)
+def phf_refresh_dag():
+    """
+    Lit la config 'data_source' depuis Variable, scanne tous les cosXXXX et leurs buckets,
+    construit un PerfectHash global + bitarray, sauvegarde localement.
+    """
+
+    @task
+    def run_full_refresh():
+        # 1) Lecture config
+        data_source_str = Variable.get("data_source", "{}")
+        data_source_dict = eval_or_json_load(data_source_str)
+
+        # 2) Crée l'orchestateur
+        #    (Clés d'API à adapter selon votre infra)
+        orchestrator = FullRefreshOrchestrator(
+            data_source=data_source_dict,
+            api_key="CHANGE_ME_API_KEY",
+            svc_id="CHANGE_ME_SERVICE_ID"
+        )
+
+        # 3) Lance le refresh
+        orchestrator.run_refresh()
+
+    run_full_refresh()
+
+def eval_or_json_load(s):
+    """
+    Permet de charger un JSON depuis la string,
+    que ce soit un dict Python ou un JSON str.
+    """
+    try:
+        return json_loads(s)
+    except:
+        import ast
+        return ast.literal_eval(s)
+
+def json_loads(txt):
+    import json
+    return json.loads(txt)
+
+dag_instance = phf_refresh_dag()
