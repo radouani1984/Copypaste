@@ -1,0 +1,101 @@
+import boto3
+import concurrent.futures
+from abc import ABC, abstractmethod
+from tqdm import tqdm
+
+# ---------------------
+# 1) Interface (ex. : IStorageService) - Respect de l'Interface Segregation et Dependency Inversion
+# ---------------------
+class IStorageService(ABC):
+    @abstractmethod
+    def list_objects(self, bucket: str) -> list:
+        """Retourne la liste de tous les keys dans le bucket."""
+        pass
+
+    @abstractmethod
+    def get_object_stream(self, bucket: str, key: str):
+        """Retourne un flux (file-like object) en lecture pour le key spécifié."""
+        pass
+
+    @abstractmethod
+    def upload_stream(self, bucket: str, key: str, stream):
+        """Upload un flux (file-like) dans le bucket/clé spécifié."""
+        pass
+
+# ---------------------
+# 2) Implémentation concrète pour IBM COS (ou S3) - Respect de la Single Responsibility
+# ---------------------
+class IBMCloudStorageService(IStorageService):
+    def __init__(self, endpoint_url, access_key, secret_key):
+        self.client = boto3.client(
+            "s3",
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            endpoint_url=endpoint_url
+        )
+
+    def list_objects(self, bucket: str) -> list:
+        keys = []
+        paginator = self.client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=bucket):
+            if "Contents" in page:
+                for obj in page["Contents"]:
+                    keys.append(obj["Key"])
+        return keys
+
+    def get_object_stream(self, bucket: str, key: str):
+        response = self.client.get_object(Bucket=bucket, Key=key)
+        return response["Body"]  # Flux en lecture (streaming), pas en mémoire complète
+
+    def upload_stream(self, bucket: str, key: str, stream):
+        # put_object exige un contenu en mémoire ; upload_fileobj gère le streaming
+        self.client.upload_fileobj(stream, bucket, key)
+
+# ---------------------
+# 3) Méthode de copie - Respect de l'Open/Closed (on peut ajouter d'autres services sans tout casser)
+# ---------------------
+def copy_object(key, source_service: IStorageService, source_bucket: str,
+                destination_service: IStorageService, destination_bucket: str):
+    stream = source_service.get_object_stream(source_bucket, key)
+    destination_service.upload_stream(destination_bucket, key, stream)
+
+# ---------------------
+# 4) Exécution parallèle - On sépare la logique de copie (Single Responsibility) de l’orchestration
+# ---------------------
+def parallel_copy_all(source_service: IStorageService, source_bucket: str,
+                      destination_service: IStorageService, destination_bucket: str,
+                      max_workers=5):
+    keys = source_service.list_objects(source_bucket)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        list(tqdm(
+            executor.map(
+                lambda k: copy_object(k, source_service, source_bucket,
+                                      destination_service, destination_bucket),
+                keys
+            ),
+            total=len(keys),
+            desc="Copie en cours"
+        ))
+    print("Copie terminée !")
+
+# ---------------------
+# 5) Exemple d'utilisation - Deux endpoints COS distincts
+# ---------------------
+if __name__ == "__main__":
+    # -- Paramètres COS1 (source) --
+    endpoint_cos1 = "https://s3.eu-fr1.cloud-object-storage.appdomain.cloud"
+    access_cos1   = "COS1_ACCESS_KEY"
+    secret_cos1   = "COS1_SECRET_KEY"
+    bucket_cos1   = "nom-bucket-source"
+
+    # -- Paramètres COS2 (destination) --
+    endpoint_cos2 = "https://s3.us-south.cloud-object-storage.appdomain.cloud"
+    access_cos2   = "COS2_ACCESS_KEY"
+    secret_cos2   = "COS2_SECRET_KEY"
+    bucket_cos2   = "nom-bucket-destination"
+
+    cos1 = IBMCloudStorageService(endpoint_cos1, access_cos1, secret_cos1)
+    cos2 = IBMCloudStorageService(endpoint_cos2, access_cos2, secret_cos2)
+
+    # Copier en parallèle
+    parallel_copy_all(cos1, bucket_cos1, cos2, bucket_cos2, max_workers=10)
