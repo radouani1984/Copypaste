@@ -1,0 +1,137 @@
+import boto3
+import concurrent.futures
+from tqdm import tqdm
+
+# ---------------------
+# 1) Wrapper pour suivre la progression octet par octet
+# ---------------------
+class TqdmStream:
+    """
+    Enveloppe un flux (file-like object) et met à jour un tqdm à chaque .read().
+    """
+    def __init__(self, raw_stream, pbar):
+        self.raw_stream = raw_stream
+        self.pbar = pbar
+
+    def read(self, amt=None):
+        chunk = self.raw_stream.read(amt)
+        self.pbar.update(len(chunk))
+        return chunk
+
+    def close(self):
+        self.raw_stream.close()
+
+    # Permet d'utiliser le 'with' en toute sécurité
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+# ---------------------
+# 2) Copie d'un objet : lit en streaming depuis cos1 et upload dans cos2
+# ---------------------
+def copy_object(key, cos1_client, source_bucket, cos2_client, destination_bucket, pbar, failures):
+    try:
+        # Récupère l'objet source (flux)
+        response = cos1_client.get_object(Bucket=source_bucket, Key=key)
+        raw_stream = response["Body"]  # flux "file-like" (pas chargé en mémoire)
+
+        # Enveloppe ce flux pour mettre à jour la barre de progression
+        with TqdmStream(raw_stream, pbar) as wrapped_stream:
+            # Upload en streaming vers cos2 (aucun stockage local)
+            cos2_client.upload_fileobj(wrapped_stream, destination_bucket, key)
+
+    except Exception as e:
+        # En cas d'erreur, on stocke la clé pour un traitement ultérieur
+        failures.append(key)
+
+# ---------------------
+# 3) Méthode principale de copie
+# ---------------------
+def copy_between_two_cos_parallel(
+    endpoint_cos1, access_cos1, secret_cos1, source_bucket,
+    endpoint_cos2, access_cos2, secret_cos2, destination_bucket,
+    max_workers=5
+):
+    # Initialisation des clients
+    cos1_client = boto3.client(
+        "s3",
+        aws_access_key_id=access_cos1,
+        aws_secret_access_key=secret_cos1,
+        endpoint_url=endpoint_cos1
+    )
+    cos2_client = boto3.client(
+        "s3",
+        aws_access_key_id=access_cos2,
+        aws_secret_access_key=secret_cos2,
+        endpoint_url=endpoint_cos2
+    )
+
+    # Liste de tous les objets source (récupération des clés et tailles)
+    all_objects = []
+    paginator = cos1_client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=source_bucket):
+        if "Contents" in page:
+            for obj in page["Contents"]:
+                all_objects.append((obj["Key"], obj["Size"]))
+
+    # Calcul du volume total à copier (en octets)
+    total_bytes = sum(size for _, size in all_objects)
+
+    # Barre de progression en bytes
+    pbar = tqdm(total=total_bytes, unit="B", unit_scale=True, desc="Transfert global")
+
+    # Pour enregistrer les clés ayant échoué
+    failures = []
+
+    # Copie en parallèle
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = []
+        for key, _ in all_objects:
+            f = executor.submit(
+                copy_object,
+                key=key,
+                cos1_client=cos1_client,
+                source_bucket=source_bucket,
+                cos2_client=cos2_client,
+                destination_bucket=destination_bucket,
+                pbar=pbar,
+                failures=failures
+            )
+            futures.append(f)
+
+        # Attendre la fin de toutes les tâches (pour remonter d'éventuelles exceptions)
+        concurrent.futures.wait(futures)
+
+    pbar.close()
+
+    print("Copie terminée !")
+    if failures:
+        print("Certains objets n'ont pas pu être copiés :")
+        for k in failures:
+            print("- ", k)
+    else:
+        print("Aucune erreur de copie détectée.")
+
+# ---------------------
+# 4) Exemple d'utilisation
+# ---------------------
+if __name__ == "__main__":
+    # -- Paramètres COS1 (source) --
+    endpoint_cos1 = "https://s3.eu-fr1.cloud-object-storage.appdomain.cloud"
+    access_cos1   = "COS1_ACCESS_KEY"
+    secret_cos1   = "COS1_SECRET_KEY"
+    bucket_cos1   = "nom-bucket-source"
+
+    # -- Paramètres COS2 (destination) --
+    endpoint_cos2 = "https://s3.us-south.cloud-object-storage.appdomain.cloud"
+    access_cos2   = "COS2_ACCESS_KEY"
+    secret_cos2   = "COS2_SECRET_KEY"
+    bucket_cos2   = "nom-bucket-destination"
+
+    copy_between_two_cos_parallel(
+        endpoint_cos1, access_cos1, secret_cos1, bucket_cos1,
+        endpoint_cos2, access_cos2, secret_cos2, bucket_cos2,
+        max_workers=10
+    )
