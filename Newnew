@@ -1,0 +1,178 @@
+from datetime import datetime, timedelta
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+import boto3
+import json
+from botocore.config import Config
+from boto3.s3.transfer import TransferConfig
+
+default_args = {
+    "owner": "airflow",
+    "retries": 3,
+    "retry_delay": timedelta(minutes=5),
+    "max_active_tasks": 10
+}
+
+def get_cos_client():
+    return boto3.client(
+        "s3",
+        endpoint_url="https://s3.eu-de.cloud-object-storage.appdomain.cloud",
+        aws_access_key_id="API_KEY",
+        aws_secret_access_key="SERVICE_INSTANCE_ID",
+        config=Config(
+            signature_version="oauth",
+            max_pool_connections=100  # Augmentez selon le besoin
+        )
+    )
+
+def fetch_state(bucket: str, state_key: str) -> dict:
+    """Récupère l'état précédent depuis COS"""
+    s3 = S3Hook(aws_conn_id="ibm_cos_conn")
+    try:
+        content = s3.read_key(key=state_key, bucket_name=bucket)
+        return json.loads(content)
+    except:
+        return {}
+
+def detect_changes(**context):
+    """Détecte nouveaux/modifiés/supprimés via comparaison d'ETag"""
+    source_bucket = "source-bucket"
+    dest_bucket = "dest-bucket"
+    state_key = "sync_state.json"
+    
+    # Récupérer les états
+    previous_state = fetch_state(dest_bucket, state_key)
+    current_state = {}
+    
+    client = get_cos_client()
+    paginator = client.get_paginator("list_objects_v2")
+    
+    # Parcourir tous les objets source
+    for page in paginator.paginate(Bucket=source_bucket):
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            current_state[key] = {
+                "ETag": obj["ETag"],
+                "LastModified": obj["LastModified"].isoformat()
+            }
+    
+    # Calculer les différences
+    new_files = []
+    updated_files = []
+    deleted_files = []
+    
+    for key, metadata in current_state.items():
+        if key not in previous_state:
+            new_files.append(key)
+        elif metadata["ETag"] != previous_state[key]["ETag"]:
+            updated_files.append(key)
+    
+    for key in previous_state:
+        if key not in current_state:
+            deleted_files.append(key)
+    
+    # Stocker dans XCom
+    context["ti"].xcom_push(key="new_files", value=new_files)
+    context["ti"].xcom_push(key="updated_files", value=updated_files)
+    context["ti"].xcom_push(key="deleted_files", value=deleted_files)
+    context["ti"].xcom_push(key="current_state", value=current_state)
+
+def sync_files(**context):
+    """Sync nouveaux + modifiés avec gestion des gros fichiers"""
+    new_files = context["ti"].xcom_pull(key="new_files")
+    updated_files = context["ti"].xcom_pull(key="updated_files")
+    all_files_to_sync = new_files + updated_files
+    
+    client = get_cos_client()
+    
+    for key in all_files_to_sync:
+        try:
+            # Vérifier la taille pour décider du transfert
+            head = client.head_object(Bucket="source-bucket", Key=key)
+            
+            if head["ContentLength"] > 100 * 1024 * 1024:  # >100MB
+                transfer_config = TransferConfig(
+                    multipart_threshold=100 * 1024 * 1024,
+                    max_concurrency=20
+                )
+                client.download_file(
+                    "source-bucket",
+                    key,
+                    f"/tmp/{key.split('/')[-1]}",
+                    Config=transfer_config
+                )
+                client.upload_file(
+                    f"/tmp/{key.split('/')[-1]}",
+                    "dest-bucket",
+                    key,
+                    Config=transfer_config
+                )
+            else:
+                client.copy_object(
+                    CopySource={"Bucket": "source-bucket", "Key": key},
+                    Bucket="dest-bucket",
+                    Key=key
+                )
+        except Exception as e:
+            print(f"Erreur sur {key}: {e}")
+            raise
+
+def delete_files(**context):
+    """Suppression par lots avec gestion d'erreurs"""
+    deleted_files = context["ti"].xcom_pull(key="deleted_files")
+    client = get_cos_client()
+    
+    for i in range(0, len(deleted_files), 1000):
+        batch = [{"Key": k} for k in deleted_files[i:i+1000]]
+        try:
+            client.delete_objects(
+                Bucket="dest-bucket",
+                Delete={"Objects": batch}
+            )
+        except Exception as e:
+            print(f"Erreur batch {i}: {e}")
+
+def save_state(**context):
+    """Sauvegarde le nouvel état dans COS"""
+    current_state = context["ti"].xcom_pull(key="current_state")
+    client = get_cos_client()
+    client.put_object(
+        Bucket="dest-bucket",
+        Key="sync_state.json",
+        Body=json.dumps(current_state)
+    )
+
+with DAG(
+    "cos_advanced_sync",
+    default_args=default_args,
+    schedule_interval="@hourly",
+    start_date=datetime(2023, 1, 1),
+    catchup=False,
+) as dag:
+    
+    detect_task = PythonOperator(
+        task_id="detect_changes",
+        python_callable=detect_changes,
+        provide_context=True
+    )
+    
+    sync_task = PythonOperator(
+        task_id="sync_files",
+        python_callable=sync_files,
+        provide_context=True
+    )
+    
+    delete_task = PythonOperator(
+        task_id="delete_files",
+        python_callable=delete_files,
+        provide_context=True
+    )
+    
+    save_task = PythonOperator(
+        task_id="save_state",
+        python_callable=save_state,
+        provide_context=True
+    )
+    
+    detect_task >> [sync_task, delete_task] >> save_task
