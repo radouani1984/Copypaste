@@ -1,0 +1,56 @@
+Speech for Quant Discovery Presentation
+
+"Hello everyone, today I’m excited to present Quant Discovery, our data-driven platform that ensures seamless access, security, and efficient data processing for our teams."
+
+
+---
+
+1. Who We Are & What We Do
+
+"Before diving into the technical details, let’s talk about us. We are a team of engineers, analysts, and developers working together to build a secure, scalable, and intelligent platform for handling quantitative data. Our goal is simple: to provide the right people with the right data, at the right time, in a secure and efficient way."
+
+
+---
+
+2. Access & Security – The Opera House Analogy
+
+"Now, let’s talk about security and access control. Imagine an opera house. Everyone—whether you're a guest, a performer, or a staff member—enters through the main entrance. That’s exactly how our platform works: all users, whether they are administrators, developers, or analysts, must go through Nginx, our front gate."
+
+"As you step inside, the OAuth2 Proxy acts like the ticket checkpoint, verifying who you are. It checks your identity with our authentication service, TAASe, ensuring you belong here."
+
+"But just because you’re inside doesn’t mean you can go anywhere. This is where Auth Proxy comes in—it’s like the ushers and security team inside the opera house. Depending on your role, you might only have access to the main hall, while VIP guests can enter the private lounges, and only authorized personnel can go backstage."
+
+"This means that even if two users are inside Quant Discovery, they won’t necessarily see or do the same things. Access is tailored to ensure security, compliance, and efficiency."
+
+
+---
+
+3. Data Flow & Processing – The Engine Behind the Scenes
+
+"Now, what happens behind the scenes? Our platform isn’t just about access; it’s about processing and leveraging data."
+
+"At the heart of it, we have Apache Airflow, which acts like an automated logistics team. It goes out and collects data from multiple sources: S3 buckets, APIs, and external applications. Then, it injects that data into our internal storage, making it available for analysis."
+
+"Once the data is in place, different teams can use it. Our web applications provide structured access, while Jupyter serves as a powerful analytical workspace, allowing our teams to run models, test hypotheses, and extract insights."
+
+
+---
+
+4. Toolchain – Keeping the Platform Running Smoothly
+
+"But none of this works without the right tools. That’s where our Toolchain comes in—it ensures that we can download and manage the necessary libraries, keeping everything up to date and optimized for our workflows."
+
+
+---
+
+Conclusion
+
+"In summary, Quant Discovery is designed to be secure, efficient, and scalable. Just like an opera house, we make sure that the right people have the right access, while our backstage systems ensure a seamless data flow from multiple sources to our applications and analytics tools."
+
+"If you have any questions, let’s discuss them now! Thank you!"
+
+
+---
+
+This version keeps the speech engaging, clear, and structured, making it perfect for a PowerPoint presentation. The opera house analogy makes security and access easy to understand, even for non-technical audiences.
+
