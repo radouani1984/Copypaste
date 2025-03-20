@@ -1,0 +1,18 @@
+Workflow – Step 1: Application Registration
+
+"Now, let’s walk through the workflow of how an application gets registered and deployed in Quant Discovery."
+
+Step 1: A Developer Pushes Code
+"Let’s take an example. We have a developer—let’s call him Karim. As a good developer, Karim writes and pushes new code regularly. This code is stored in Azure DevOps and goes through our Toolchain pipelines to ensure its quality, validation, and security."
+
+Step 2: Deployment to the Quant Namespace
+"Once the tests pass, the code is automatically deployed into our Kubernetes namespace dedicated to Quant Discovery. However, deployment alone isn’t enough—an application must be registered before users can access it."
+
+Step 3: Application Registration via Admin
+"At this stage, Karim, the developer, requests the Quant admin to officially register the application. This is a critical step because, without registration, the application remains inaccessible and requires a manual approval process via a ticketing system."
+
+Step 4: Authorization Management via Auth Proxy
+"The admin registers the application using Auth Proxy, which ensures that only authorized users can access it. This registration process updates our knowledge base so that the system recognizes the new application and grants the right permissions."
+
+Conclusion
+"This structured workflow ensures that every application is securely developed, tested, deployed, and registered, maintaining the security and efficiency of the Quant Discovery platform."
