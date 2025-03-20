@@ -1,0 +1,21 @@
+Speech – Step 2: Access Control
+
+"Now that we’ve seen how an application is registered, let’s move on to how access control works within Quant Discovery."
+
+"Each application has a set of permissions, represented here by tokens—like the yellow token you see on the diagram. These tokens define who can access what."
+
+Step 1: Authentication
+"When a user tries to connect, their request first goes through the Nginx Router, which then redirects them to the OAuth2 Proxy. This step is crucial because it verifies who they are by checking their identity through our authentication service, TAASe."
+
+Step 2: Authorization Check
+"Once the user is authenticated, the request moves to Auth Proxy, which checks whether they have the right permissions—essentially, the correct token to access the application."
+
+Step 3: Handling Insufficient Permissions
+"If the user doesn’t have the right token, they won’t be able to access the application. In that case, they have two options: either they request access through the ticketing system, or an admin manually assigns them the correct token for that specific application."
+
+Step 4: Granting Access
+"Once the admin adds the user with the appropriate permissions, they are issued the correct token, allowing them to access the application seamlessly on their next login attempt."
+
+Conclusion
+"This process ensures that access is strictly controlled, while still allowing flexibility for users who need additional permissions. It balances security and usability, ensuring that only the right people have the right level of access at all times."
+
