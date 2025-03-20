@@ -1,0 +1,19 @@
+Speech – Data Sync: Scan & Sync Process
+
+"Now, let’s talk about how data synchronization works in Quant Discovery. The process is divided into two key steps: Scan and Sync."
+
+1. The Scan Phase – Preparing the Workspace
+
+"Imagine you’re assembling a piece of furniture. You have two ways to do it. The first way is to build each piece one by one, searching for the right screws, bolts, and tools as you go. But that’s inefficient—you’re constantly stopping, looking for materials, and losing time."
+
+"The Scan phase avoids this problem. Instead of processing files blindly, it first analyzes all data sources—Sense & QRG, Quant Edge & SQLI, Trails API, and more. Then, it builds a structured Trie (tree structure) that organizes everything, mapping what exists, what has changed, and what needs to be updated."
+
+2. The Sync Phase – Efficient Execution
+
+"Now, let’s go back to our furniture analogy. The second way to build it is to prepare everything in advance. You read the instructions, lay out the right screws, dowels, and parts in the correct order. When it’s time to assemble, everything is easily accessible, making the process much smoother and faster."
+
+"That’s exactly what happens in the Sync phase. Instead of searching for what to update file by file, it leverages the Trie built during the Scan phase. This allows the system to efficiently copy, update, or delete files as needed without unnecessary overhead."
+
+Conclusion
+
+"By splitting the process into Scan and Sync, Quant Discovery ensures that data synchronization is both structured and optimized. It avoids the inefficiencies of real-time searching and instead enables fast and reliable updates, just like how proper preparation speeds up furniture assembly."
