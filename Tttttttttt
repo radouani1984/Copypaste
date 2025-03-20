@@ -1,0 +1,7 @@
+Before diving into the technical architecture of Quant Discovery, let’s take a moment to understand what the platform enables."
+
+"Our goal is to provide a robust framework for data management and utilization. This is built on several key pillars: data synchronization, user authentication and management, the ability to quickly create POCs, and running models efficiently through Jupyter Hub."
+
+"But we go beyond that—our platform also supports experimentation, continuous model improvement, and backtesting to ensure reliability and actionable insights."
+
+"To sum it up, our goal is simple: to provide the right data to the right people, at the right time, in a secure and efficient way."
