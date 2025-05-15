@@ -1,0 +1,14 @@
+sudo mkdir -p /etc/systemd/system.conf.d
+sudo tee /etc/systemd/system.conf.d/proxy.conf >/dev/null <<'EOF'
+[Manager]
+DefaultEnvironment=\
+  HTTP_PROXY=http://proxy.exemple.com:3128 \
+  HTTPS_PROXY=http://proxy.exemple.com:3128 \
+  NO_PROXY=127.0.0.1,localhost
+EOF
+
+sudo systemctl daemon-reexec
+
+sudo systemctl restart jupyterhub
+
+systemctl show jupyterhub --property=Environment | grep -i proxy
