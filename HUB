@@ -1,0 +1,46 @@
+import os
+from oauthenticator.generic import GenericOAuthenticator
+c = get_config()  # obligatoire si vous générez le fichier
+
+# ─── Authentification : OpenID Connect ────────────────────────────────────────
+c.JupyterHub.authenticator_class = GenericOAuthenticator
+c.GenericOAuthenticator.client_id     = os.environ["OIDC_CLIENT_ID"]
+c.GenericOAuthenticator.client_secret = os.environ["OIDC_CLIENT_SECRET"]
+c.GenericOAuthenticator.oauth_callback_url = os.environ["OIDC_CALLBACK_URL"]
+
+OIDC = os.environ["OIDC_ISSUER"].rstrip("/")
+c.GenericOAuthenticator.authorize_url = f"{OIDC}/protocol/openid-connect/auth"
+c.GenericOAuthenticator.token_url     = f"{OIDC}/protocol/openid-connect/token"
+c.GenericOAuthenticator.userdata_url  = f"{OIDC}/protocol/openid-connect/userinfo"
+
+c.GenericOAuthenticator.scope               = ["openid", "profile", "email", "groups"]
+c.GenericOAuthenticator.username_claim      = "preferred_username"
+c.GenericOAuthenticator.enable_auth_state   = True
+c.GenericOAuthenticator.auto_login          = True
+
+# autoriser tous les users OIDC
+c.Authenticator.allow_all    = True
+# mais ne désigner qu’un ou plusieurs admins
+c.Authenticator.admin_users  = {"alice@exemple.com","bob@exemple.com"}
+
+# ─── Spawner de production : SystemdSpawner ───────────────────────────────────
+c.JupyterHub.spawner_class        = 'systemdspawner.SystemdSpawner'
+c.SystemdSpawner.dynamic_users    = True    # pas de comptes Linux pré-créés :contentReference[oaicite:0]{index=0}
+c.SystemdSpawner.mem_limit         = "4G"
+c.SystemdSpawner.cpu_limit         = 2.0
+# répertoire de travail (évite /home/)
+c.SystemdSpawner.user_workingdir   = "/srv/jupyterhub/{USERNAME}"
+
+# ─── URLs & reverse-proxy ──────────────────────────────────────────────────────
+# interface publique (gérée par Nginx TLS)
+c.JupyterHub.bind_url     = "https://hub.mondomaine.com/jhub"
+# URL interne pour la communication Hub ↔ proxy/spawners
+c.JupyterHub.hub_bind_url = "http://127.0.0.1:8000/jhub"
+
+# ─── Logging ───────────────────────────────────────────────────────────────────
+c.JupyterHub.log_level    = "INFO"
+
+
+
+pip install oauthenticator jupyterhub-systemdspawner
+systemctl restart jupyterhub
