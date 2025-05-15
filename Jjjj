@@ -1,0 +1,39 @@
+[Unit]
+Description=JupyterHub
+After=network.target
+
+[Service]
+# 1. Lancer en root pour créer des cgroups
+User=root
+
+# 2. Charger les variables sensibles
+#    /etc/jupyterhub/jupyterhub.env contient par exemple :
+#      JUPYTERHUB_CRYPT_KEY=ab12... (32 octets hex)
+#      OIDC_CLIENT_ID=...
+#      OIDC_CLIENT_SECRET=...
+#      OIDC_ISSUER=https://...
+#      OIDC_CALLBACK_URL=https://hub.example.com/hub/oauth_callback
+EnvironmentFile=/etc/jupyterhub/jupyterhub.env 0
+
+# 3. Chemin vers votre virtualenv/binaire
+Environment="PATH=/opt/jupyterhub/bin:/usr/local/bin:/usr/bin"
+
+# 4. Répertoire de travail (optionnel)
+WorkingDirectory=/opt/jupyterhub
+
+# 5. Commande de démarrage
+ExecStart=/opt/jupyterhub/bin/jupyterhub \
+  -f /opt/jupyterhub/etc/jupyterhub/jupyterhub_config.py
+
+# 6. Redémarrage automatique en cas d’échec
+Restart=on-failure
+RestartSec=5s
+
+# 7. Durcissement (privilege drop, isolation)
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target
