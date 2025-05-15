@@ -1,0 +1,7 @@
+c.SystemdSpawner.unit_extra_properties = {
+    'Environment': (
+        'HTTP_PROXY=http://proxy.exemple.com:3128 '
+        'HTTPS_PROXY=http://proxy.exemple.com:3128 '
+        'NO_PROXY=127.0.0.1,localhost'
+    )
+}
