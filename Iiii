@@ -1,0 +1,1 @@
+curl_httpclient.	python # jupyterhub_config.py import tornado.httpclient tornado.httpclient.AsyncHTTPClient.configure(   "tornado.curl_httpclient.CurlAsyncHTTPClient" )  Installez pycurl : pip install pycurl. 
