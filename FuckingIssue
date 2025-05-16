@@ -1,0 +1,29 @@
+###############################################################################
+# Spawner unique (même UID, pas de comptes Unix)
+###############################################################################
+c.JupyterHub.spawner_class = 'jupyterhub.spawner.SimpleLocalProcessSpawner'
+
+# Répertoire commun pour tous les notebooks
+c.Spawner.notebook_dir = '/srv/jupyterhub/work'
+c.Spawner.cwd          = '/srv/jupyterhub/work'   # évite /home/<user>
+
+# Commande single-user (chemin absolu → plus d’erreur “not found”)
+c.Spawner.cmd = ['/opt/jupyterhub/bin/jupyterhub-singleuser']
+c.Spawner.args = ['--LabApp.default_url=/lab']
+
+###############################################################################
+# URLs internes / proxy
+###############################################################################
+c.JupyterHub.bind_url        = "http://127.0.0.1:8000"
+c.JupyterHub.hub_bind_url    = "http://127.0.0.1:8081"
+c.JupyterHub.hub_connect_url = "http://127.0.0.1:8081"
+###############################################################################
+
+
+
+sudo mkdir -p /srv/jupyterhub/work && sudo chmod 1777 /srv/jupyterhub/work
+
+
+sudo pkill -f configurable-http-proxy
+sudo pkill -f jupyterhub
+sudo systemctl restart jupyterhub
