@@ -1,0 +1,170 @@
+[
+  {
+    "item_id": 1,
+    "description": "ford kuga 2.0 tdci 136 trend - mec: 25/02/2010 - km compteur: 183 338 - mise à prix: 4400",
+    "extracted_concepts": {
+      "marque": "Ford",
+      "modèle": "Kuga",
+      "version": "2.0 TDCi 136 Trend",
+      "date_de_mise_en_circulation": "25/02/2010",
+      "kilométrage": 183338,
+      "énergie": "Diesel"
+    },
+    "pos_tagging": [
+      ["ford", "NOUN"],
+      ["kuga", "NOUN"],
+      ["2.0", "NUM"],
+      ["tdci", "NOUN"],
+      ["136", "NUM"],
+      ["trend", "NOUN"],
+      ["-", "PUNCT"],
+      ["mec", "NOUN"],
+      [":", "PUNCT"],
+      ["25/02/2010", "NUM"],
+      ["-", "PUNCT"],
+      ["km", "NOUN"],
+      ["compteur", "NOUN"],
+      [":", "PUNCT"],
+      ["183", "NUM"],
+      ["338", "NUM"],
+      ["-", "PUNCT"],
+      ["mise", "NOUN"],
+      ["à", "ADP"],
+      ["prix", "NOUN"],
+      [":", "PUNCT"],
+      ["4400", "NUM"]
+    ],
+    "google_search_query": "Ford Kuga 2.0 TDCi 136 Trend 2010 occasion"
+  },
+  {
+    "item_id": 2,
+    "description": "renault clio iv sté 1.5 dci 75 air - mec: 15/07/2019 - km compteur: 118 980 - mise à prix: 4600",
+    "extracted_concepts": {
+      "marque": "Renault",
+      "modèle": "Clio",
+      "version": "IV Sté 1.5 DCI 75 Air",
+      "date_de_mise_en_circulation": "15/07/2019",
+      "kilométrage": 118980,
+      "énergie": "Diesel"
+    },
+    "pos_tagging": [
+      ["renault", "NOUN"],
+      ["clio", "NOUN"],
+      ["iv", "NOUN"],
+      ["sté", "NOUN"],
+      ["1.5", "NUM"],
+      ["dci", "NOUN"],
+      ["75", "NUM"],
+      ["air", "NOUN"],
+      ["-", "PUNCT"],
+      ["mec", "NOUN"],
+      [":", "PUNCT"],
+      ["15/07/2019", "NUM"],
+      ["-", "PUNCT"],
+      ["km", "NOUN"],
+      ["compteur", "NOUN"],
+      [":", "PUNCT"],
+      ["118", "NUM"],
+      ["980", "NUM"],
+      ["-", "PUNCT"],
+      ["mise", "NOUN"],
+      ["à", "ADP"],
+      ["prix", "NOUN"],
+      [":", "PUNCT"],
+      ["4600", "NUM"]
+    ],
+    "google_search_query": "Renault Clio IV 1.5 DCI 75 Air 2019 occasion"
+  },
+  {
+    "item_id": 3,
+    "description": "peugeot 2008 1.2 puretech 82 active s-s etg5 - mec: 24/07/2014 - km compteur: 149 389 - mise à prix: 2700",
+    "extracted_concepts": {
+      "marque": "Peugeot",
+      "modèle": "2008",
+      "version": "1.2 PureTech 82 Active S-S ETG5",
+      "date_de_mise_en_circulation": "24/07/2014",
+      "kilométrage": 149389,
+      "énergie": "Essence"
+    },
+    "pos_tagging": [
+      ["peugeot", "NOUN"],
+      ["2008", "NUM"],
+      ["1.2", "NUM"],
+      ["puretech", "NOUN"],
+      ["82", "NUM"],
+      ["active", "ADJ"],
+      ["s-s", "NOUN"],
+      ["etg5", "NOUN"],
+      ["-", "PUNCT"],
+      ["mec", "NOUN"],
+      [":", "PUNCT"],
+      ["24/07/2014", "NUM"],
+      ["-", "PUNCT"],
+      ["km", "NOUN"],
+      ["compteur", "NOUN"],
+      [":", "PUNCT"],
+      ["149", "NUM"],
+      ["389", "NUM"],
+      ["-", "PUNCT"],
+      ["mise", "NOUN"],
+      ["à", "ADP"],
+      ["prix", "NOUN"],
+      [":", "PUNCT"],
+      ["2700", "NUM"]
+    ],
+    "google_search_query": "Peugeot 2008 1.2 PureTech 82 Active 2014 occasion"
+  },
+  {
+    "item_id": 4,
+    "description": "peugeot 2008 1.2 puretech 110 allure s-s eat6 - mec: 29/12/2015 - km compteur: 125 988 - mise à prix: 4400",
+    "extracted_concepts": {
+      "marque": "Peugeot",
+      "modèle": "2008",
+      "version": "1.2 PureTech 110 Allure S-S EAT6",
+      "date_de_mise_en_circulation": "29/12/2015",
+      "kilométrage": 125988,
+      "énergie": "Essence"
+    },
+    "pos_tagging": [
+      ["peugeot", "NOUN"],
+      ["2008", "NUM"],
+      ["1.2", "NUM"],
+      ["puretech", "NOUN"],
+      ["110", "NUM"],
+      ["allure", "NOUN"],
+      ["s-s", "NOUN"],
+      ["eat6", "NOUN"],
+      ["-", "PUNCT"],
+      ["mec", "NOUN"],
+      [":", "PUNCT"],
+      ["29/12/2015", "NUM"],
+      ["-", "PUNCT"],
+      ["km", "NOUN"],
+      ["compteur", "NOUN"],
+      [":", "PUNCT"],
+      ["125", "NUM"],
+      ["988", "NUM"],
+      ["-", "PUNCT"],
+      ["mise", "NOUN"],
+      ["à", "ADP"],
+      ["prix", "NOUN"],
+      [":", "PUNCT"],
+      ["4400", "NUM"]
+    ],
+    "google_search_query": "Peugeot 2008 1.2 PureTech 110 Allure 2015 occasion"
+  }
+]
+
+
+
+Voici les résultats au format JSON pour chaque description :
+
+```json
+[
+  {
+    "item_id": 1,
+    "description": "ford kuga 2.0 tdci 136 trend - mec: 25/02/2010 - km compteur: 183 338 - mise à prix: 4400",
+    "category": null,
+    "extracted_concepts": {
+      "marque": "Ford",
+      "mod
