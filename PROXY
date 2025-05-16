@@ -1,0 +1,72 @@
+# /etc/systemd/system.conf.d/10-proxy.conf
+[Manager]
+DefaultEnvironment=\
+ http_proxy=http://proxy.exemple.com:3128 \
+ https_proxy=http://proxy.exemple.com:3128 \
+ no_proxy=127.0.0.1,localhost,::1,canary-taase.am.dev.echonet,.dev.echonet
+
+
+DefaultEnvironment=\
+ HTTP_PROXY=http://proxy.exemple.com:3128 \
+ HTTPS_PROXY=http://proxy.exemple.com:3128 \
+ NO_PROXY=127.0.0.1,localhost,::1,canary-taase.am.dev.echonet,.dev.echonet \
+ http_proxy=http://proxy.exemple.com:3128 \
+ https_proxy=http://proxy.exemple.com:3128 \
+ no_proxy=127.0.0.1,localhost,::1,canary-taase.am.dev.echonet,.dev.echonet
+
+
+sudo systemctl daemon-reexec
+sudo systemctl restart jupyterhub
+
+
+systemctl show jupyterhub --property=Environment | grep -i proxy
+# → les 6 variables doivent s’afficher
+
+curl -x $http_proxy -d '' https://canary-taase.am.dev.echonet/connect/token
+# ↳ doit maintenant contacter DIRECTEMENT le serveur (pas 599)
+
+
+
+# tout en haut de jupyterhub_config.py
+from tornado.httpclient import AsyncHTTPClient
+
+AsyncHTTPClient.configure(
+    "tornado.curl_httpclient.CurlAsyncHTTPClient",
+    defaults=dict(
+        proxy_host="proxy.exemple.com",
+        proxy_port=3128,
+        # si besoin :
+        # proxy_username="user",
+        # proxy_password="pass",
+        connect_timeout=20,
+        request_timeout=60,
+    )
+)
+
+
+from oauthenticator.generic import GenericOAuthenticator
+from tornado.curl_httpclient import CurlAsyncHTTPClient
+
+class ProxyGeneric(GenericOAuthenticator):
+    http_client = CurlAsyncHTTPClient(
+        max_clients=16,
+        defaults=dict(proxy_host="proxy.exemple.com", proxy_port=3128)
+    )
+
+c.JupyterHub.authenticator_class = ProxyGeneric
+
+
+from systemdspawner import SystemdSpawner
+
+class ProxySpawner(SystemdSpawner):
+    env_keep = ['http_proxy', 'https_proxy', 'no_proxy']  # ou ajoute tes vars ici
+    def make_preexec_fn(self):
+        env = super().make_preexec_fn()
+        env['http_proxy'] = 'http://proxy.exemple.com:3128'
+        env['https_proxy'] = 'http://proxy.exemple.com:3128'
+        env['no_proxy'] = '127.0.0.1,localhost,::1'
+        return env
+
+c.JupyterHub.spawner_class = ProxySpawner
+
+
