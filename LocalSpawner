@@ -1,0 +1,11 @@
+c.JupyterHub.spawner_class = 'jupyterhub.spawner.LocalProcessSpawner'
+c.Spawner.cmd = ['jupyter-lab']            # ou laisse par défaut
+c.Spawner.notebook_dir = '/srv/jupyterhub/work'    # dossier commun
+
+
+sudo mkdir -p /srv/jupyterhub/work
+sudo chown root:root /srv/jupyterhub/work
+chmod 1777 /srv/jupyterhub/work        # tous users, type /tmp
+
+
+sudo systemctl restart jupyterhub
