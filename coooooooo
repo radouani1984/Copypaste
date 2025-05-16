@@ -156,15 +156,33 @@
 ]
 
 
+Tu es un système d’extraction d’informations sémantiques à partir de descriptions libres.  
+À partir d’un ensemble de descriptions textuelles associées à une catégorie, tu dois extraire un ensemble de concepts définis à l’avance.
 
-Voici les résultats au format JSON pour chaque description :
+OBJECTIF
+Pour chaque description :
+1. Extraire les *valeurs des concepts* quand elles sont présentes.
+2. Fournir l’analyse **POS tagging** de la description.
+3. Definir un sarch query to be used on Google Search
 
-```json
-[
-  {
-    "item_id": 1,
-    "description": "ford kuga 2.0 tdci 136 trend - mec: 25/02/2010 - km compteur: 183 338 - mise à prix: 4400",
-    "category": null,
-    "extracted_concepts": {
-      "marque": "Ford",
-      "mod
+STRUCTURE D’ENTRÉE
+- Format CSV : `item_id`, `description`, `category`
+- La langue des textes est le **français**
+
+Concepts : 
+
+['marque', 'modèle', 'version', 'date_de_mise_en_circulation', 'kilométrage', 'puissance_fiscale', 'type_de_carrosserie', 'énergie', 'couleur', 'nombre_de_places', 'nombre_de_portes', 'transmission', 'équipements', 'état_technique', 'contrôle_technique', 'statut_tva', 'statut_carte_grise', 'dimensions', 'accessoires', 'historique']
+
+ford kuga 2.0 tdci 136 trend - mec: 25/02/2010 - km compteur: 183 338 - mise à prix: 4400
+renault clio iv sté 1.5 dci 75 air - mec: 15/07/2019 - km compteur: 118 980 - mise à prix: 4600
+peugeot 2008 1.2 puretech 82 active s-s etg5 - mec: 24/07/2014 - km compteur: 149 389 - mise à prix: 2700
+peugeot 2008 1.2 puretech 110 allure s-s eat6 - mec: 29/12/2015 - km compteur: 125 988 - mise à prix: 4400
+
+RÈGLES
+- Si un concept est absent ou non détectable, **ne pas l'inclure** dans la sortie.
+- `dimensions` doivent être structurées (`hauteur`, `largeur`, `profondeur`, etc.).
+- `features` peut contenir des **listes** 
+- POS tagging sous format : `[("token", "POS"), ...]`
+
+📤 SORTIE ATTENDUE
+Format : **JSON Array**, une entrée par `item_id`.
