@@ -1,0 +1,10 @@
+# 1. Tuer tout ce qui traîne
+sudo pkill -f configurable-http-proxy
+sudo pkill -f jupyterhub
+
+# 2. Tester manuellement
+/opt/jupyterhub/bin/jupyterhub  -f /opt/jupyterhub/etc/jupyterhub/jupyterhub_config.py --debug
+
+
+c.JupyterHub.hub_bind_url    = "http://127.0.0.1:8082"
+c.JupyterHub.hub_connect_url = "http://127.0.0.1:8082"
