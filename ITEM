@@ -1,0 +1,41 @@
+###############################################################################
+# 0. Spawner : tout le monde sous le même UID (celui du service)
+###############################################################################
+c.JupyterHub.spawner_class = 'jupyterhub.spawner.LocalProcessSpawner'
+
+# --- Où placer les notebooks -------------------------------------------------
+#  Répertoire unique, déjà créé par root, accessible à tous
+c.LocalProcessSpawner.notebook_dir      = '/srv/jupyterhub/work'
+#  Empêche le Spawner de chercher /home/<username>
+c.LocalProcessSpawner.home_dir_template = '/srv/jupyterhub/work'
+
+# --- Commande single-user ----------------------------------------------------
+#  Laisse la commande par défaut (jupyterhub-singleuser) et ouvre Lab
+c.Spawner.args = ['--LabApp.default_url=/lab']
+#  (ou) si tu préfères JupyterLab direct :
+#  c.Spawner.cmd = ['/opt/jupyterhub/bin/jupyter-lab']
+
+# --- URLs internes / proxy ---------------------------------------------------
+c.JupyterHub.bind_url        = "http://127.0.0.1:8000"
+c.JupyterHub.hub_bind_url    = "http://127.0.0.1:8081"
+c.JupyterHub.hub_connect_url = "http://127.0.0.1:8081"
+###############################################################################
+
+
+# 1. Crée le dossier partagé & droits 1777 (comme /tmp)
+sudo mkdir -p /srv/jupyterhub/work
+sudo chmod 1777 /srv/jupyterhub/work
+
+# 2. Vérifie que le binaire single-user est dans le PATH
+/opt/jupyterhub/bin/jupyterhub-singleuser --version   # doit répondre
+
+# 3. Redémarre proprement
+sudo pkill -f configurable-http-proxy
+sudo pkill -f jupyterhub
+sudo systemctl restart jupyterhub
+
+
+
+ss -ltnp | grep 8081        # Hub API écoute bien
+ls -ld /srv/jupyterhub/work # drwxrwxrwt …
+ps -ef | grep singleuser    # processus par utilisateur, UID = root
