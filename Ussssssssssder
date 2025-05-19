@@ -1,0 +1,16 @@
+import os, pathlib
+
+# ─── Fonction appelée avant chaque spawn ─────────────────────────────
+def ensure_user_dir(spawner):
+    userdir = pathlib.Path("/srv/jupyterhub/users") / spawner.user.name
+    if not userdir.exists():
+        userdir.mkdir(mode=0o755, parents=True, exist_ok=True)  # crée /srv/…/username
+    spawner.log.info(f"Workspace ready → {userdir}")
+
+c.Spawner.pre_spawn_hook = ensure_user_dir          # ↩︎ active le hook
+
+# ─── Répertoires perso & démarrage ───────────────────────────────────
+c.Spawner.notebook_dir = '/srv/jupyterhub/users/{username}'  # auto-expand ✔︎ 0
+c.Spawner.cwd          = '/srv/jupyterhub/users/{username}'
+c.Spawner.args         = ['--allow-root', '--LabApp.default_url=/lab']
+c.Spawner.environment  = {'JUPYTER_ALLOW_ROOT': '1'}
