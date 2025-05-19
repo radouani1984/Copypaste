@@ -1,0 +1,28 @@
+Vérifier depuis le serveur que le problème vient bien du proxy externe
+
+Étape	Commande (à exécuter en SSH sur le même hôte que JupyterHub)	Attendu
+
+1. Récupérer un jeton Jupyter	bash jupyter server list	copie le token ?token=XXXX
+2. Créer un noyau localement	```bash curl -s -X POST -H "Authorization: token XXXX" \  -H "Content-Type: application/json" \  -d '{}' http://127.0.0.1:8000/api/kernels	jq```
+3. Créer la session (le fameux PATCH)	```bash curl -s -X PATCH -H "Authorization: token XXXX" \  -H "Content-Type: application/json" \  -d '{"kernel":{"id":"<ID>"},"path":"","type":"notebook","name":""}' \  http://127.0.0.1:8000/api/sessions/<ID>	jq```
+4. Ouvrir un notebook en local	bash ssh -L8889:127.0.0.1:8000 user@serveur puis navigateur → http://localhost:8889/lab?token=XXXX	Tout fonctionne ⇒ la pile serveur est saine
+
+
+Si tout est OK en local mais le navigateur d’entreprise affiche toujours la page « Something went wrong », c’est votre proxy/captor HTTP qui substitue la réponse PATCH (HTML 200).
+Dans ce cas :
+
+Ajoutez le domaine au NO_PROXY ou sortez-le du PAC.
+
+Ou faites ouvrir la méthode PATCH dans la politique BlueCoat / Zscaler.
+
+Les logs serveur (200, 101 WebSocket) confirment qu’il n’y a pas d’erreur Jupyter côté back-end. 
+
+
+
+---
+
+Pourquoi le test console suffit ?
+
+La doc REST précise que /api/sessions/{id} doit répondre un obj. JSON ; s’il revient du HTML en navigation externe, l’anomalie est forcément entre le poste utilisateur et Nginx (intercepteur, WAF, IPS…).
+
+Score de confiance : 78 %
