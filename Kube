@@ -1,0 +1,54 @@
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+from datetime import datetime, timedelta
+from kubernetes import client, config
+
+def list_ppp_pods_image_tags(**kwargs):
+    # Charge la configuration depuis le ServiceAccount du Pod Airflow
+    config.load_incluster_config()  # 0
+    v1 = client.CoreV1Api()
+    pods = v1.list_namespaced_pod(
+        namespace='default',
+        label_selector='app=ppp'    # pods gérés par le déploiement ppp
+    )  # 1
+
+    tags = []
+    for pod in pods.items:
+        for container in pod.spec.containers:
+            image = container.image           # ex. "repo/name:tag"
+            if ':' in image:
+                tag = image.split(':', 1)[1]
+            else:
+                tag = 'latest'
+            tags.append({
+                'pod': pod.metadata.name,
+                'container': container.name,
+                'image': image,
+                'tag': tag
+            })
+    print(tags)
+    return tags
+
+default_args = {
+    'owner': 'airflow',
+    'depends_on_past': False,
+    'email_on_failure': False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=5),
+}
+
+with DAG(
+    dag_id='list_ppp_pods_image_tags',
+    default_args=default_args,
+    description='Liste les tags d’images pour les pods du déploiement ppp',
+    start_date=datetime(2025, 5, 20),
+    schedule_interval='@daily',
+    catchup=False
+) as dag:
+
+    get_image_tags = PythonOperator(
+        task_id='get_image_tags',
+        python_callable=list_ppp_pods_image_tags
+    )
+
+    get_image_tags
